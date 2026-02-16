@@ -77,6 +77,8 @@ class BillController extends Controller
         if ($request->has('is_installment') && $request->is_installment) {
             $bill->installment_current = 1;
             $bill->group_id = \Illuminate\Support\Str::uuid();
+        } elseif ($request->has('is_recurring') && $request->is_recurring) {
+            $bill->group_id = \Illuminate\Support\Str::uuid();
         }
 
         $bill->save();
@@ -91,6 +93,17 @@ class BillController extends Controller
                 $installment->due_date = $startDate->copy()->addMonths($i - 1);
                 $installment->paid = false;
                 $installment->save();
+            }
+        }
+
+        if ($bill->is_recurring && !$bill->is_installment) {
+            $startDate = \Carbon\Carbon::parse($bill->due_date);
+
+            for ($i = 1; $i <= 5; $i++) {
+                $recurringBill = $bill->replicate();
+                $recurringBill->due_date = $startDate->copy()->addMonths($i);
+                $recurringBill->paid = false;
+                $recurringBill->save();
             }
         }
 
