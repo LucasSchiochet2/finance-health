@@ -122,7 +122,7 @@ class BillSeeder extends Seeder
                 'name' => $billData['name'],
                 'amount' => $billData['amount'],
                 'category_bill_id' => $categories[$billData['category_index']]->id,
-                'user_id' => $user->id,
+                'user_id' => 1,
                 'due_date' => $billData['due_date'],
                 'paid' => $billData['paid'],
                 'description' => 'Conta gerada automaticamente pelo seeder',

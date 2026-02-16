@@ -12,12 +12,13 @@ Route::post('/login', [AuthController::class, 'login']);
     Route::get('/user', [AuthController::class, 'user']);
 
     // Bills Routes
-    Route::get('/bills', [BillController::class, 'index']);
-    Route::post('/bills', [BillController::class, 'store']);
-    Route::get('/bills/{id}', [BillController::class, 'show']);
-    Route::put('/bills/{id}', [BillController::class, 'update']);
-    Route::delete('/bills/{id}', [BillController::class, 'destroy']);
-Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/bills/{user}', [BillController::class, 'index']);
+    Route::post('/bills/{user}', [BillController::class, 'store']);
+    Route::get('/bills/{user}/category/{categoryId}', [BillController::class, 'showByCategory']);
+    Route::get('/bills/{user}/{id}', [BillController::class, 'show']);
+    Route::put('/bills/{user}/{id}', [BillController::class, 'update']);
+    Route::delete('/bills/{user}/{id}', [BillController::class, 'destroy']);
+    Route::middleware('auth:sanctum')->group(function () {
     // Auth Routes (Protected)
 
-});
+    });

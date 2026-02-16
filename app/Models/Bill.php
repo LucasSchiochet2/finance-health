@@ -20,6 +20,7 @@ class Bill extends Model
         'is_installment',
         'installment_count',
         'installment_current',
+        'group_id',
         'category_bill_id',
         'user_id',
     ];

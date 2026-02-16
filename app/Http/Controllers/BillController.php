@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Bill;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -11,39 +12,46 @@ class BillController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(User $user)
     {
-        // Return bills only for the authenticated user with categories
-        $bills = Bill::where('user_id', Auth::id())->with('category')->get();
+        $bills = Bill::where('user_id', $user->id)
+            ->with('category')
+            ->orderBy('due_date', 'asc')
+            ->get();
 
-        // Calculate totals
-        $totalAmount = $bills->sum('amount');
-        $totalCount = $bills->count();
+        $grouped = $bills->groupBy(function ($bill) {
+            return \Carbon\Carbon::parse($bill->due_date)->format('Y-m');
+        });
 
-        // Calculate stats per category
-        $byCategory = $bills->groupBy('category_bill_id')->map(function ($group) use ($totalAmount) {
-            $categoryTotal = $group->sum('amount');
-            $percentage = $totalAmount > 0 ? round(($categoryTotal / $totalAmount) * 100, 2) : 0;
+        $monthlyData = $grouped->map(function ($monthBills, $month) {
+            $monthTotal = $monthBills->sum('amount');
 
-            // Handle potentially missing category relation
-            $categoryName = $group->first()->category ? $group->first()->category->name : 'Sem Categoria';
+            $byCategory = $monthBills->groupBy('category_bill_id')->map(function ($group) use ($monthTotal) {
+                $categoryTotal = $group->sum('amount');
+                $percentage = $monthTotal > 0 ? round(($categoryTotal / $monthTotal) * 100, 2) : 0;
+
+                $categoryName = $group->first()->category ? $group->first()->category->name : 'Sem Categoria';
+
+                return [
+                    'category_id' => $group->first()->category_bill_id,
+                    'category_name' => $categoryName,
+                    'total_amount' => $categoryTotal,
+                    'percentage' => $percentage,
+                    'count' => $group->count(),
+                ];
+            })->values();
 
             return [
-                'category_id' => $group->first()->category_bill_id,
-                'category_name' => $categoryName,
-                'total_amount' => $categoryTotal,
-                'percentage' => $percentage,
-                'count' => $group->count(),
+                'month' => $month,
+                'total_amount' => $monthTotal,
+                'total_count' => $monthBills->count(),
+                'summary_by_category' => $byCategory,
+                'bills' => $monthBills
             ];
-        })->values(); // Reset keys to array
+        });
 
         return response()->json([
-            'summary' => [
-                'total_amount' => $totalAmount,
-                'total_count' => $totalCount,
-                'by_category' => $byCategory
-            ],
-            'bills' => $bills
+             'data' => $monthlyData->values()
         ]);
     }
 
@@ -68,6 +76,7 @@ class BillController extends Controller
 
         if ($request->has('is_installment') && $request->is_installment) {
             $bill->installment_current = 1;
+            $bill->group_id = \Illuminate\Support\Str::uuid();
         }
 
         $bill->save();
@@ -96,6 +105,33 @@ class BillController extends Controller
         $bill = Bill::where('user_id', Auth::id())->findOrFail($id);
         return response()->json($bill);
     }
+    public function showByCategory(User $user, string $categoryId)
+    {
+        $bills = Bill::where('user_id', $user->id)
+            ->where('category_bill_id', $categoryId)
+            ->with('category')
+            ->orderBy('due_date', 'asc')
+            ->get();
+
+        $grouped = $bills->groupBy(function ($bill) {
+            return \Carbon\Carbon::parse($bill->due_date)->format('Y-m');
+        });
+
+        $monthlyData = $grouped->map(function ($monthBills, $month) {
+            $monthTotal = $monthBills->sum('amount');
+
+            return [
+                'month' => $month,
+                'total_amount' => $monthTotal,
+                'total_count' => $monthBills->count(),
+                'bills' => $monthBills
+            ];
+        });
+
+        return response()->json([
+            'data' => $monthlyData->values()
+        ]);
+    }
 
     /**
      * Update the specified resource in storage.
@@ -104,7 +140,45 @@ class BillController extends Controller
     {
         $bill = Bill::where('user_id', Auth::id())->findOrFail($id);
 
+        // Capture state before update
+        $wasInstallment = $bill->is_installment;
+
         $bill->update($request->all());
+
+        $bill->refresh();
+
+        if ($bill->is_installment && $bill->installment_count > 1) {
+
+             if (!$wasInstallment || !$bill->installment_current) {
+                 $bill->installment_current = 1;
+                 $bill->save();
+             }
+             if ($bill->installment_current == 1) {
+                $totalInstallments = (int)$bill->installment_count;
+                $startDate = \Carbon\Carbon::parse($bill->due_date);
+
+                for ($i = 2; $i <= $totalInstallments; $i++) {
+                    $existsBill = Bill::where('user_id', Auth::id())
+                        ->where('name', $bill->name)
+                        ->where('installment_current', $i)
+                        ->whereDate('due_date', $startDate->copy()->addMonths($i - 1))
+                        ->first();
+
+                    if (!$existsBill) {
+                        $installment = $bill->replicate();
+                        $installment->installment_current = $i;
+                        $installment->due_date = $startDate->copy()->addMonths($i - 1);
+                        $installment->paid = false;
+                        $installment->save();
+                    } else {
+                        // Update group_id if it's missing
+                         if (!$existsBill->group_id) {
+                            $existsBill->update(['group_id' => $bill->group_id]);
+                         }
+                    }
+                }
+             }
+        }
 
         return response()->json($bill);
     }
@@ -115,7 +189,16 @@ class BillController extends Controller
     public function destroy(string $id)
     {
         $bill = Bill::where('user_id', Auth::id())->findOrFail($id);
-        $bill->delete();
+
+        if ($bill->group_id) {
+            // Delete all bills in the same group
+            Bill::where('user_id', Auth::id())->where('group_id', $bill->group_id)->delete();
+        } else {
+            // If no group_id but it's an installment, try to delete by best guess only if requested?
+            // User asked "if I delete, it deletes (all)?" implying they want it to.
+            // But without group_id it's unsafe. Just delete the single one for legacy data.
+            $bill->delete();
+        }
 
         return response()->json(null, 204);
     }
