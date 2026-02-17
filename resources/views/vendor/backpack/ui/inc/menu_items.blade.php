@@ -8,3 +8,4 @@
 <x-backpack::menu-item title="Cards" icon="la la-question" :link="backpack_url('card')" />
 
 <x-backpack::menu-item title="Exercises" icon="la la-question" :link="backpack_url('exercise')" />
+<x-backpack::menu-item title="Workouts" icon="la la-question" :link="backpack_url('workout')" />

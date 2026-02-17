@@ -11,8 +11,21 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('exercises_and_create_logs', function (Blueprint $table) {
-            //
+        Schema::table('exercises', function (Blueprint $table) {
+            $table->foreignId('user_id')->nullable()->constrained()->onDelete('cascade');
+            $table->string('muscle_group')->nullable();
+        });
+
+        Schema::create('exercise_logs', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->foreignId('exercise_id')->constrained()->onDelete('cascade');
+            $table->date('date');
+            $table->decimal('weight', 8, 2)->nullable();
+            $table->integer('reps')->nullable();
+            $table->integer('sets')->nullable();
+            $table->text('observation')->nullable();
+            $table->timestamps();
         });
     }
 
@@ -21,8 +34,11 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('exercises_and_create_logs', function (Blueprint $table) {
-            //
+        Schema::dropIfExists('exercise_logs');
+
+        Schema::table('exercises', function (Blueprint $table) {
+            $table->dropForeign(['user_id']);
+            $table->dropColumn(['user_id', 'muscle_group']);
         });
     }
 };

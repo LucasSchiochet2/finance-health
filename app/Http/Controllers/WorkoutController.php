@@ -1,0 +1,68 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Workout;
+use Illuminate\Http\Request;
+use App\Models\User;
+class WorkoutController extends Controller
+{
+    /**
+     * Store a newly created workout.
+     */
+    public function store(Request $request, User $user)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'observation' => 'nullable|string',
+            'default_sets' => 'nullable|integer|min:1',
+            'default_reps' => 'nullable|integer|min:1',
+            'exercises' => 'required|array|min:1',
+            'exercises.*' => 'required|array', // Enforce object structure inside array
+            'exercises.*.id' => 'required|exists:exercises,id', // Expect 'id' or 'exercise_id'
+            'exercises.*.sets' => 'nullable|integer|min:1',
+            'exercises.*.reps' => 'nullable|integer|min:1',
+            'exercises.*.order' => 'nullable|integer',
+        ]);
+
+        $workout = new Workout();
+        $workout->name = $request->name;
+        $workout->description = $request->description;
+        $workout->observation = $request->observation;
+        $workout->default_sets = $request->default_sets;
+        $workout->default_reps = $request->default_reps;
+        $workout->user_id = $user->id;
+        $workout->save();
+
+        if ($request->has('exercises')) {
+            foreach ($request->exercises as $index => $exerciseData) {
+                // Determine order: use provided order, or index + 1
+                $order = isset($exerciseData['order']) ? $exerciseData['order'] : ($index + 1);
+
+                $workout->exercises()->attach($exerciseData['id'], [
+                    'sets' => $exerciseData['sets'] ?? null,
+                    'reps' => $exerciseData['reps'] ?? null,
+                    'order' => $order,
+                ]);
+            }
+        }
+
+        // Reload keys
+        return response()->json($workout->load('exercises'), 201);
+    }
+
+    public function index(Request $request, User $user)
+    {
+        $workouts = Workout::where(function($query) use ($user) {
+                $query->where('user_id', $user->id)
+                      ->orWhereNull('user_id');
+            })
+            ->with(['exercises' => function($query) {
+                $query->withPivot(['sets', 'reps', 'order'])->orderBy('workout_exercises.order');
+            }])
+            ->get();
+
+        return response()->json($workouts);
+    }
+}

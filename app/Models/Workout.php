@@ -5,16 +5,17 @@ namespace App\Models;
 use Backpack\CRUD\app\Models\Traits\CrudTrait;
 use Illuminate\Database\Eloquent\Model;
 
-class Exercise extends Model
+class Workout extends Model
 {
     use CrudTrait;
 
     protected $fillable = [
         'name',
         'description',
-        'photo_url',
         'user_id',
-        'muscle_group'
+        'default_reps',
+        'default_sets',
+        'observation'
     ];
 
     public function user()
@@ -22,8 +23,10 @@ class Exercise extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function history()
+    public function exercises()
     {
-        return $this->hasMany(ExerciseLog::class);
+        return $this->belongsToMany(Exercise::class, 'workout_exercises')
+            ->withPivot(['reps', 'sets', 'order'])
+            ->withTimestamps();
     }
 }

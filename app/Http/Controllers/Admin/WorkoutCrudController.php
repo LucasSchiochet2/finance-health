@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Http\Requests\ExerciseRequest;
+use App\Http\Requests\WorkoutRequest;
 use Backpack\CRUD\app\Http\Controllers\CrudController;
 use Backpack\CRUD\app\Library\CrudPanel\CrudPanelFacade as CRUD;
 
 /**
- * Class ExerciseCrudController
+ * Class WorkoutCrudController
  * @package App\Http\Controllers\Admin
  * @property-read \Backpack\CRUD\app\Library\CrudPanel\CrudPanel $crud
  */
-class ExerciseCrudController extends CrudController
+class WorkoutCrudController extends CrudController
 {
     use \Backpack\CRUD\app\Http\Controllers\Operations\ListOperation;
     use \Backpack\CRUD\app\Http\Controllers\Operations\CreateOperation;
@@ -26,9 +26,9 @@ class ExerciseCrudController extends CrudController
      */
     public function setup()
     {
-        CRUD::setModel(\App\Models\Exercise::class);
-        CRUD::setRoute(config('backpack.base.route_prefix') . '/exercise');
-        CRUD::setEntityNameStrings('exercise', 'exercises');
+        CRUD::setModel(\App\Models\Workout::class);
+        CRUD::setRoute(config('backpack.base.route_prefix') . '/workout');
+        CRUD::setEntityNameStrings('workout', 'workouts');
     }
 
     /**
@@ -39,14 +39,16 @@ class ExerciseCrudController extends CrudController
      */
     protected function setupListOperation()
     {
-        CRUD::column('name')->label('Nome');
-        CRUD::column('muscle_group')->label('Grupo Muscular');
+        CRUD::column('name')->label('Treino');
+        CRUD::column('description')->label('Descrição');
+        CRUD::column('default_sets')->label('Séries Padrão');
+        CRUD::column('default_reps')->label('Repetições Padrão');
+        CRUD::column('observation')->label('Observações');
         CRUD::column('user_id')
             ->label('Usuário')
             ->type('select')
             ->entity('user')
             ->attribute('name')
-            ->model(\App\Models\User::class)
             ->wrapper([
                 'href' => function ($crud, $column, $entry, $related_key) {
                     return backpack_url('user/'.$related_key.'/show');
@@ -62,35 +64,30 @@ class ExerciseCrudController extends CrudController
      */
     protected function setupCreateOperation()
     {
-        CRUD::setValidation(ExerciseRequest::class);
+        CRUD::setValidation(WorkoutRequest::class);
 
-        CRUD::field('name')->label('Nome do Exercício');
-        CRUD::field('description')->type('textarea')->label('Descrição');
+        CRUD::field('name')->label('Nome do Treino');
+        CRUD::field('description')->type('textarea')->label('Descrição')->hint('Ex: Dia de Pernas A');
+        CRUD::field('observation')->type('textarea')->label('Observações')->hint('Ex: Descanso de 60s entre séries');
 
-        CRUD::field('muscle_group')
-            ->type('select_from_array')
-            ->label('Grupo Muscular')
-            ->options([
-                'Peito' => 'Peito',
-                'Costas' => 'Costas',
-                'Pernas' => 'Pernas',
-                'Ombros' => 'Ombros',
-                'Bíceps' => 'Bíceps',
-                'Tríceps' => 'Tríceps',
-                'Abdúmen' => 'Abdômen',
-                'Outro' => 'Outro',
-            ]);
+        CRUD::field('default_sets')->type('number')->label('Séries Padrão');
+        CRUD::field('default_reps')->type('number')->label('Repetições Padrão');
 
-        CRUD::field('photo_url')->type('url')->label('URL da Foto (Opcional)');
-
-        // Se for admin, pode definir se é vinculado a um usuário ou se é padrão (nulo)
         CRUD::field('user_id')
+            ->label('Usuário Vinculado')
             ->type('select')
-            ->label('Usuário Vinculado (Deixe vazio para padrão do sistema)')
             ->entity('user')
-            ->model(\App\Models\User::class)
             ->attribute('name')
-            ->nullable();
+            ->model(\App\Models\User::class)
+            ->nullable()
+            ->hint('Deixe vazio para ser um treino padrão do sistema');
+
+        CRUD::field('exercises')
+            ->label('Exercícios')
+            ->type('select2_multiple')
+            ->entity('exercises')
+            ->attribute('name')
+            ->pivot(true);
     }
 
     /**
