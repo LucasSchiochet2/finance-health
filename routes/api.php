@@ -32,6 +32,7 @@ use Illuminate\Support\Facades\Route;
         Route::get('/exercises/{user}/{id}', [ExerciseController::class, 'show']);
         Route::post('/exercises/{user}', [ExerciseController::class, 'store']);
         Route::delete('/exercises/{user}/{id}', [ExerciseController::class, 'destroy']);
+        Route::get('/exercises/{user}/{id}/logs', [ExerciseController::class, 'getLogs']);
         Route::post('/exercises/{user}/{id}/logs', [ExerciseController::class, 'addLog']);
 
 

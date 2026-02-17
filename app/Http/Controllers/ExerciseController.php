@@ -106,4 +106,24 @@ class ExerciseController extends Controller
 
         return response()->json($log, 201);
     }
+
+    /**
+     * Get logs for a specific exercise and user.
+     */
+    public function getLogs(User $user, string $id)
+    {
+        // Ensure exercise exists first
+        $exercise = Exercise::find($id);
+
+        if (!$exercise) {
+            return response()->json(['message' => "Exercise with ID {$id} not found."], 404);
+        }
+
+        $logs = ExerciseLog::where('user_id', $user->id)
+            ->where('exercise_id', $id)
+            ->orderBy('date', 'desc')
+            ->get();
+
+        return response()->json($logs);
+    }
 }
