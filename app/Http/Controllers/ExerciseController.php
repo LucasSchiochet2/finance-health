@@ -22,7 +22,7 @@ class ExerciseController extends Controller
         ]);
 
         $exercise = new Exercise($validated);
-        $exercise->user_id = $user()->id;
+        $exercise->user_id = $user->id;
         $exercise->save();
 
         return response()->json($exercise, 201);
