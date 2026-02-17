@@ -82,4 +82,47 @@ class WorkoutController extends Controller
 
         return response()->json($workout);
     }
+
+    /**
+     * Update the specified workout in storage.
+     */
+    public function update(Request $request, User $user, $id)
+    {
+        $workout = Workout::where('id', $id)
+            ->where('user_id', $user->id) // Only update own workouts
+            ->firstOrFail();
+
+        $validated = $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'description' => 'nullable|string',
+            'observation' => 'nullable|string',
+            'default_sets' => 'nullable|integer|min:1',
+            'default_reps' => 'nullable|integer|min:1',
+            'exercises' => 'sometimes|array',
+            'exercises.*.id' => 'required_with:exercises|exists:exercises,id',
+            'exercises.*.sets' => 'nullable|integer|min:1',
+            'exercises.*.reps' => 'nullable|integer|min:1',
+            'exercises.*.order' => 'nullable|integer',
+        ]);
+
+        $workout->update($request->only('name', 'description', 'observation', 'default_sets', 'default_reps'));
+
+        if ($request->has('exercises')) {
+             $syncData = [];
+             foreach ($request->exercises as $index => $exerciseData) {
+                 $order = isset($exerciseData['order']) ? $exerciseData['order'] : ($index + 1);
+                 $sets = $exerciseData['sets'] ?? $workout->default_sets;
+                 $reps = $exerciseData['reps'] ?? $workout->default_reps;
+
+                 $syncData[$exerciseData['id']] = [
+                     'sets' => $sets,
+                     'reps' => $reps,
+                     'order' => $order
+                 ];
+             }
+             $workout->exercises()->sync($syncData);
+        }
+
+        return response()->json($workout->load('exercises'));
+    }
 }

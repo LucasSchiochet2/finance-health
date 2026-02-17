@@ -80,7 +80,11 @@ class ExerciseController extends Controller
                 $query->where('user_id', $user->id)
                       ->orWhereNull('user_id');
             })
-            ->firstOrFail();
+            ->first();
+
+        if (!$exercise) {
+            return response()->json(['message' => 'Exercise not found or access denied'], 404);
+        }
 
         $validated = $request->validate([
             'date' => 'required|date',
