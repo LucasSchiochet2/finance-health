@@ -118,13 +118,20 @@ class BillController extends Controller
         $bill = Bill::where('user_id', Auth::id())->findOrFail($id);
         return response()->json($bill);
     }
-    public function showByCategory(User $user, string $categoryId)
+    public function showByCategory(Request $request, User $user, string $categoryId)
     {
-        $bills = Bill::where('user_id', $user->id)
+        $query = Bill::where('user_id', $user->id)
             ->where('category_bill_id', $categoryId)
             ->with('category')
-            ->orderBy('due_date', 'asc')
-            ->get();
+            ->orderBy('due_date', 'asc');
+
+        if ($request->has('month')) {
+            $month = $request->query('month');
+            // Check if month format matches Y-m default or handle both
+            $query->where('due_date', 'like', "{$month}%");
+        }
+
+        $bills = $query->get();
 
         $grouped = $bills->groupBy(function ($bill) {
             return \Carbon\Carbon::parse($bill->due_date)->format('Y-m');
@@ -149,14 +156,31 @@ class BillController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(Request $request, string $userId, string $id)
     {
         $bill = Bill::where('user_id', Auth::id())->findOrFail($id);
+        $originalBill = $bill->replicate();
 
         // Capture state before update
         $wasInstallment = $bill->is_installment;
 
         $bill->update($request->all());
+
+        if ($request->has('update_all') && $request->update_all && $bill->group_id) {
+            $billsToUpdate = Bill::where('user_id', Auth::id())
+                ->where('group_id', $bill->group_id)
+                ->where('id', '!=', $bill->id)
+                ->get();
+
+            foreach ($billsToUpdate as $b) {
+                // Update common fields
+                $b->name = $bill->name;
+                $b->amount = $bill->amount;
+                $b->category_bill_id = $bill->category_bill_id;
+                // Add other shared fields if necessary
+                $b->save();
+            }
+        }
 
         $bill->refresh();
 
@@ -172,9 +196,9 @@ class BillController extends Controller
 
                 for ($i = 2; $i <= $totalInstallments; $i++) {
                     $existsBill = Bill::where('user_id', Auth::id())
-                        ->where('name', $bill->name)
+                        ->where('name', $originalBill->name) // Check with original Name
                         ->where('installment_current', $i)
-                        ->whereDate('due_date', $startDate->copy()->addMonths($i - 1))
+                        ->where('group_id', $bill->group_id) // Ensure same group
                         ->first();
 
                     if (!$existsBill) {
@@ -184,7 +208,8 @@ class BillController extends Controller
                         $installment->paid = false;
                         $installment->save();
                     } else {
-                        // Update group_id if it's missing
+                        // Update existing installment if update_all is true (handled above)
+                        // or if we need to regenerate/link
                          if (!$existsBill->group_id) {
                             $existsBill->update(['group_id' => $bill->group_id]);
                          }
@@ -199,17 +224,14 @@ class BillController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(Request $request, string $userId, string $id)
     {
         $bill = Bill::where('user_id', Auth::id())->findOrFail($id);
 
-        if ($bill->group_id) {
+        if ($request->has('delete_all') && filter_var($request->query('delete_all'), FILTER_VALIDATE_BOOLEAN) && $bill->group_id) {
             // Delete all bills in the same group
             Bill::where('user_id', Auth::id())->where('group_id', $bill->group_id)->delete();
         } else {
-            // If no group_id but it's an installment, try to delete by best guess only if requested?
-            // User asked "if I delete, it deletes (all)?" implying they want it to.
-            // But without group_id it's unsafe. Just delete the single one for legacy data.
             $bill->delete();
         }
 
