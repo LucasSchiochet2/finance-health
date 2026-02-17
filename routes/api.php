@@ -27,7 +27,7 @@ use Illuminate\Support\Facades\Route;
         Route::get('/bills/{user}/{id}', [BillController::class, 'show']);
         Route::put('/bills/{user}/{id}', [BillController::class, 'update']);
         Route::delete('/bills/{user}/{id}', [BillController::class, 'destroy']);
-        
+
         Route::get('/exercises/{user}', [ExerciseController::class, 'index']);
         Route::get('/exercises/{user}/{id}', [ExerciseController::class, 'show']);
         Route::post('/exercises/{user}', [ExerciseController::class, 'store']);
@@ -38,3 +38,4 @@ use Illuminate\Support\Facades\Route;
         Route::get('/workouts/{user}', [WorkoutController::class, 'index']);
         Route::post('/workouts/{user}', [WorkoutController::class, 'store']);
         Route::get('/workouts/{user}/{id}', [WorkoutController::class, 'show']);
+        Route::put('/workouts/{user}/{id}', [WorkoutController::class, 'update']);
