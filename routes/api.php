@@ -27,9 +27,13 @@ use Illuminate\Support\Facades\Route;
         Route::get('/bills/{user}/{id}', [BillController::class, 'show']);
         Route::put('/bills/{user}/{id}', [BillController::class, 'update']);
         Route::delete('/bills/{user}/{id}', [BillController::class, 'destroy']);
-                Route::post('/exercises/{user}', [ExerciseController::class, 'store']);
+        
+        Route::get('/exercises/{user}', [ExerciseController::class, 'index']);
+        Route::get('/exercises/{user}/{id}', [ExerciseController::class, 'show']);
+        Route::post('/exercises/{user}', [ExerciseController::class, 'store']);
         Route::delete('/exercises/{user}/{id}', [ExerciseController::class, 'destroy']);
         Route::post('/exercises/{user}/{id}/logs', [ExerciseController::class, 'addLog']);
+
 
         Route::get('/workouts/{user}', [WorkoutController::class, 'index']);
         Route::post('/workouts/{user}', [WorkoutController::class, 'store']);

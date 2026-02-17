@@ -10,6 +10,35 @@ use Illuminate\Http\Request;
 class ExerciseController extends Controller
 {
     /**
+     * Display a listing of the resource.
+     */
+    public function index(User $user)
+    {
+        // Return system exercises (user_id is null) AND user's exercises
+        $exercises = Exercise::whereNull('user_id')
+            ->orWhere('user_id', $user->id)
+            ->get();
+
+        return response()->json($exercises);
+    }
+
+    /**
+     * Display the specified resource.
+     */
+    public function show(User $user, string $id)
+    {
+        // Find exercise if it belongs to user OR is system default
+        $exercise = Exercise::where('id', $id)
+            ->where(function ($query) use ($user) {
+                $query->where('user_id', $user->id)
+                      ->orWhereNull('user_id');
+            })
+            ->firstOrFail();
+
+        return response()->json($exercise);
+    }
+
+    /**
      * Store a newly created exercise in storage.
      */
     public function store(Request $request, User $user)
