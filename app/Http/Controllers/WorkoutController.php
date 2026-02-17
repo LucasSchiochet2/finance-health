@@ -113,22 +113,53 @@ class WorkoutController extends Controller
 
         $workout->update($request->only('name', 'description', 'observation', 'default_sets', 'default_reps'));
 
+        // If exercises key is present (even if empty), sync relevant exercises
         if ($request->has('exercises')) {
              $syncData = [];
-             foreach ($request->exercises as $index => $exerciseData) {
-                 $order = isset($exerciseData['order']) ? $exerciseData['order'] : ($index + 1);
-                 $sets = $exerciseData['sets'] ?? $workout->default_sets;
-                 $reps = $exerciseData['reps'] ?? $workout->default_reps;
+             // Log input for debugging
+             \Illuminate\Support\Facades\Log::info('Workout Update Exercises Payload:', ['exercises' => $request->exercises]);
 
-                 $syncData[$exerciseData['id']] = [
-                     'sets' => $sets,
-                     'reps' => $reps,
-                     'order' => $order
-                 ];
+             if (is_array($request->exercises)) {
+                 foreach ($request->exercises as $index => $exerciseData) {
+                     // Skip if no ID provided (improper format)
+                     if (!isset($exerciseData['id'])) continue;
+
+                     $order = isset($exerciseData['order']) ? $exerciseData['order'] : ($index + 1);
+                     $sets = $exerciseData['sets'] ?? $workout->default_sets;
+                     $reps = $exerciseData['reps'] ?? $workout->default_reps;
+
+                     $syncData[$exerciseData['id']] = [
+                         'sets' => $sets,
+                         'reps' => $reps,
+                         'order' => $order
+                     ];
+                 }
              }
+             // Sync will remove any exercises not in $syncData
              $workout->exercises()->sync($syncData);
         }
 
         return response()->json($workout->load('exercises'));
+    }
+
+    /**
+     * Remove an exercise from a workout.
+     */
+    public function removeExercise(User $user, $workoutId, $exerciseId)
+    {
+        $workout = Workout::find($workoutId);
+
+        if (!$workout) {
+             return response()->json(['message' => "Workout ID {$workoutId} not found"], 404);
+        }
+
+        if ($workout->user_id !== $user->id) {
+             return response()->json(['message' => "Unauthorized. You can only modify your own workouts."], 403);
+        }
+
+        // Detach the exercise from the workout
+        $workout->exercises()->detach($exerciseId);
+
+        return response()->json(['message' => 'Exercise removed from workout successfully.']);
     }
 }
