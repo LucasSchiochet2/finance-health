@@ -62,7 +62,7 @@ class ExerciseController extends Controller
         ]);
 
         $log = new ExerciseLog($validated);
-        $log->user_id = $user()->id;
+        $log->user_id = $user->id;
         $log->exercise_id = $exercise->id;
         $log->save();
 
