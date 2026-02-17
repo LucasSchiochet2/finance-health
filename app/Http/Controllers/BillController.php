@@ -15,7 +15,7 @@ class BillController extends Controller
     public function index(User $user)
     {
         $bills = Bill::where('user_id', $user->id)
-            ->with('category')
+            ->with(['category', 'creditCard'])
             ->orderBy('due_date', 'asc')
             ->get();
 
@@ -65,6 +65,7 @@ class BillController extends Controller
             'amount' => 'required|numeric',
             'due_date' => 'required|date',
             'category_bill_id' => 'required|exists:category_bills,id',
+            'credit_card_id' => 'nullable|exists:credit_cards,id',
         ]);
 
         $bill = new Bill($request->all());
@@ -113,16 +114,19 @@ class BillController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
+    public function show(string $userId, string $id)
     {
-        $bill = Bill::where('user_id', Auth::id())->findOrFail($id);
+        $bill = Bill::where('user_id', Auth::id())
+            ->with(['category', 'creditCard'])
+            ->findOrFail($id);
+
         return response()->json($bill);
     }
     public function showByCategory(Request $request, User $user, string $categoryId)
     {
         $query = Bill::where('user_id', $user->id)
             ->where('category_bill_id', $categoryId)
-            ->with('category')
+            ->with(['category', 'creditCard'])
             ->orderBy('due_date', 'asc');
 
         if ($request->has('month')) {
@@ -158,6 +162,10 @@ class BillController extends Controller
      */
     public function update(Request $request, string $userId, string $id)
     {
+        $validated = $request->validate([
+            'credit_card_id' => 'nullable|exists:credit_cards,id',
+        ]);
+        
         $bill = Bill::where('user_id', Auth::id())->findOrFail($id);
         $originalBill = $bill->replicate();
 
@@ -177,6 +185,7 @@ class BillController extends Controller
                 $b->name = $bill->name;
                 $b->amount = $bill->amount;
                 $b->category_bill_id = $bill->category_bill_id;
+                $b->credit_card_id = $bill->credit_card_id;
                 // Add other shared fields if necessary
                 $b->save();
             }

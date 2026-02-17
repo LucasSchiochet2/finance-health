@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BillController;
+use App\Http\Controllers\CardController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -21,4 +22,9 @@ use Illuminate\Support\Facades\Route;
         Route::get('/bills/{user}/{id}', [BillController::class, 'show']);
         Route::put('/bills/{user}/{id}', [BillController::class, 'update']);
         Route::delete('/bills/{user}/{id}', [BillController::class, 'destroy']);
+
+        // Cards Routes
+
     });
+Route::get('/cards/{user}', [CardController::class, 'index']);
+Route::post('/cards/{user}', [CardController::class, 'store']);

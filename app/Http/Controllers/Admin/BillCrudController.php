@@ -50,6 +50,13 @@ class BillCrudController extends CrudController
         ->model(\App\Models\CategoryBill::class)
         ->attribute('name');
 
+    CRUD::column('credit_card_id')
+        ->type('select')
+        ->label('Cartão')
+        ->entity('creditCard')
+        ->model(\App\Models\Card::class)
+        ->attribute('name');
+
     CRUD::column('paid')->type('boolean');
 }
     /**
@@ -84,6 +91,13 @@ class BillCrudController extends CrudController
         ->label('Parcela Atual')
         ->default(1)
         ->attributes(['readonly' => 'readonly']);
+
+    CRUD::field('credit_card_id')
+        ->type('select')
+        ->label('Cartão de Crédito')
+        ->entity('creditCard')
+        ->model(\App\Models\Card::class)
+        ->attribute('name');
 
     CRUD::field('is_recurring')->type('checkbox')->label('É recorrente?');
     CRUD::field('recurring_interval')

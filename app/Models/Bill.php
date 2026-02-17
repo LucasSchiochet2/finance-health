@@ -23,6 +23,7 @@ class Bill extends Model
         'group_id',
         'category_bill_id',
         'user_id',
+        'credit_card_id',
     ];
 
     public function user()
@@ -33,5 +34,10 @@ class Bill extends Model
     public function category()
     {
         return $this->belongsTo(CategoryBill::class, 'category_bill_id');
+    }
+
+    public function creditCard()
+    {
+        return $this->belongsTo(Card::class, 'credit_card_id');
     }
 }
