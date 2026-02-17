@@ -116,7 +116,7 @@ class BillController extends Controller
      */
     public function show(string $userId, string $id)
     {
-        $bill = Bill::where('user_id', Auth::id())
+        $bill = Bill::where('user_id', $userId)
             ->with(['category', 'creditCard'])
             ->findOrFail($id);
 
@@ -165,8 +165,8 @@ class BillController extends Controller
         $validated = $request->validate([
             'credit_card_id' => 'nullable|exists:credit_cards,id',
         ]);
-        
-        $bill = Bill::where('user_id', Auth::id())->findOrFail($id);
+
+        $bill = Bill::where('user_id', $userId)->findOrFail($id);
         $originalBill = $bill->replicate();
 
         // Capture state before update
@@ -175,7 +175,7 @@ class BillController extends Controller
         $bill->update($request->all());
 
         if ($request->has('update_all') && $request->update_all && $bill->group_id) {
-            $billsToUpdate = Bill::where('user_id', Auth::id())
+            $billsToUpdate = Bill::where('user_id', $userId)
                 ->where('group_id', $bill->group_id)
                 ->where('id', '!=', $bill->id)
                 ->get();
@@ -204,7 +204,7 @@ class BillController extends Controller
                 $startDate = \Carbon\Carbon::parse($bill->due_date);
 
                 for ($i = 2; $i <= $totalInstallments; $i++) {
-                    $existsBill = Bill::where('user_id', Auth::id())
+                    $existsBill = Bill::where('user_id', $userId)
                         ->where('name', $originalBill->name) // Check with original Name
                         ->where('installment_current', $i)
                         ->where('group_id', $bill->group_id) // Ensure same group
@@ -235,11 +235,11 @@ class BillController extends Controller
      */
     public function destroy(Request $request, string $userId, string $id)
     {
-        $bill = Bill::where('user_id', Auth::id())->findOrFail($id);
+        $bill = Bill::where('user_id', $userId)->findOrFail($id);
 
         if ($request->has('delete_all') && filter_var($request->query('delete_all'), FILTER_VALIDATE_BOOLEAN) && $bill->group_id) {
             // Delete all bills in the same group
-            Bill::where('user_id', Auth::id())->where('group_id', $bill->group_id)->delete();
+            Bill::where('user_id', $userId)->where('group_id', $bill->group_id)->delete();
         } else {
             $bill->delete();
         }
