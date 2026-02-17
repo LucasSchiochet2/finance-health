@@ -65,4 +65,17 @@ class WorkoutController extends Controller
 
         return response()->json($workouts);
     }
+
+    public function show(User $user, $id)
+    {
+        $workout = Workout::with(['exercises' => function ($query) {
+            $query->withPivot(['sets', 'reps', 'order'])->orderBy('workout_exercises.order');
+        }])->findOrFail($id);
+
+        if ($workout->user_id && $workout->user_id !== $user->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        return response()->json($workout);
+    }
 }
