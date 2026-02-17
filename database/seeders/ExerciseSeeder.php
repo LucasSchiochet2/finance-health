@@ -330,13 +330,15 @@ class ExerciseSeeder extends Seeder
         ];
 
         foreach ($exercises as $exercise) {
-            Exercise::firstOrCreate(
-                ['name' => $exercise['name']],
+            Exercise::updateOrCreate(
+                [
+                    'name' => $exercise['name'],
+                    'user_id' => null, // Chave única: Nome + Sistema (user_id null)
+                ],
                 [
                     'muscle_group' => $exercise['muscle_group'],
                     'description' => $exercise['description'],
                     'photo_url' => $exercise['photo_url'],
-                    'user_id' => null,
                 ]
             );
         }
