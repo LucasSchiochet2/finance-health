@@ -12,12 +12,21 @@ class ExerciseController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(User $user)
+    public function index(Request $request, User $user)
     {
-        // Return system exercises (user_id is null) AND user's exercises
-        $exercises = Exercise::whereNull('user_id')
-            ->orWhere('user_id', $user->id)
-            ->get();
+        // Start query for system exercises (user_id is null) OR user's exercises
+        $query = Exercise::where(function ($q) use ($user) {
+            $q->whereNull('user_id')
+              ->orWhere('user_id', $user->id);
+        });
+
+        // Apply search filter if present
+        if ($request->has('search') && !empty($request->search)) {
+            $search = $request->search;
+            $query->where('name', 'like', "%{$search}%");
+        }
+
+        $exercises = $query->get();
 
         return response()->json($exercises);
     }
