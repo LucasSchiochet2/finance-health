@@ -40,9 +40,13 @@ class WorkoutController extends Controller
                 // Determine order: use provided order, or index + 1
                 $order = isset($exerciseData['order']) ? $exerciseData['order'] : ($index + 1);
 
+                // Use exercise specific sets/reps if provided, otherwise fallback to workout default
+                $sets = $exerciseData['sets'] ?? $workout->default_sets;
+                $reps = $exerciseData['reps'] ?? $workout->default_reps;
+
                 $workout->exercises()->attach($exerciseData['id'], [
-                    'sets' => $exerciseData['sets'] ?? null,
-                    'reps' => $exerciseData['reps'] ?? null,
+                    'sets' => $sets,
+                    'reps' => $reps,
                     'order' => $order,
                 ]);
             }
