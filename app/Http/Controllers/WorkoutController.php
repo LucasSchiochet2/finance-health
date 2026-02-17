@@ -88,9 +88,15 @@ class WorkoutController extends Controller
      */
     public function update(Request $request, User $user, $id)
     {
-        $workout = Workout::where('id', $id)
-            ->where('user_id', $user->id) // Only update own workouts
-            ->firstOrFail();
+        $workout = Workout::find($id);
+
+        if (!$workout) {
+             return response()->json(['message' => "Workout ID {$id} not found"], 404);
+        }
+
+        if ($workout->user_id !== $user->id) {
+             return response()->json(['message' => "Unauthorized. You can only update your own workouts."], 403);
+        }
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',

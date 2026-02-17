@@ -73,17 +73,22 @@ class ExerciseController extends Controller
      */
     public function addLog(Request $request, User $user, string $id)
     {
-        // First, check if the exercise exists and user has permission
-        // A user can add logs to their own exercises OR system exercises (where user_id is null)
-        $exercise = Exercise::where('id', $id)
-            ->where(function ($query) use ($user) {
-                $query->where('user_id', $user->id)
-                      ->orWhereNull('user_id');
-            })
-            ->first();
+        // Debugging logs
+        \Illuminate\Support\Facades\Log::info("addLog called for User: {$user->id}, Exercise ID: {$id}");
+
+        // Find the exercise first (ignoring ownership) to see if it exists
+        $exercise = Exercise::find($id);
 
         if (!$exercise) {
-            return response()->json(['message' => 'Exercise not found or access denied'], 404);
+            return response()->json(['message' => "Exercise with ID {$id} not found."], 404);
+        }
+
+        // Check ownership/permission
+        // Allow if system exercise (user_id is null) OR belongs to the user
+        if ($exercise->user_id !== null && $exercise->user_id != $user->id) {
+            return response()->json([
+                'message' => "Access denied. Exercise belongs to User {$exercise->user_id}, but request is for User {$user->id}."
+            ], 403);
         }
 
         $validated = $request->validate([
