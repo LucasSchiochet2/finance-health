@@ -81,6 +81,7 @@ class BillCrudController extends CrudController
     CRUD::field('description')->label('Descrição');
     CRUD::field('amount')->type('number')->label('Valor');
     CRUD::field('due_date')->type('date')->label('Data de Vencimento');
+    CRUD::field('notification_enabled')->type('checkbox')->label('Notificar?');
 
     CRUD::field('is_installment')->type('checkbox')->label('É parcelado?');
     CRUD::field('installment_count')

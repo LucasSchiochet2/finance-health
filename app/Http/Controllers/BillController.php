@@ -66,6 +66,7 @@ class BillController extends Controller
             'due_date' => 'required|date',
             'category_bill_id' => 'required|exists:category_bills,id',
             'credit_card_id' => 'nullable|exists:credit_cards,id',
+            'notification_enabled' => 'nullable|boolean',
         ]);
 
         $bill = new Bill($request->all());
@@ -228,6 +229,29 @@ class BillController extends Controller
         }
 
         return response()->json($bill);
+    }
+
+    public function notify(User $user)
+    {
+        $today = now()->format('Y-m-d');
+
+        $bills = Bill::where('user_id', $user->id)
+            ->whereDate('due_date', $today)
+            ->where('notification_enabled', true)
+            ->with(['category', 'creditCard'])
+            ->get();
+
+        /*
+         * Se a conta for de cartão de crédito, o vencimento da fatura
+         * será a data definida no cadastro do cartão (expiration_date).
+         * Caso contrário, null ou a própria data de vencimento da conta.
+         */
+        $bills->transform(function ($bill) {
+            $bill->invoice_due_date = $bill->creditCard ? $bill->creditCard->expiration_date : null;
+            return $bill;
+        });
+
+        return response()->json($bills);
     }
 
     /**

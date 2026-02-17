@@ -24,6 +24,7 @@ class Bill extends Model
         'category_bill_id',
         'user_id',
         'credit_card_id',
+        'notification_enabled',
     ];
 
     public function user()
