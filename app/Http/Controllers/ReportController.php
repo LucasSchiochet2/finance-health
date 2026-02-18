@@ -12,49 +12,68 @@ class ReportController extends Controller
 {
     public function getMonthlySpend(Request $request, User $user)
     {
-        // Default to current month if not provided
-        $date = $request->has('date') ? Carbon::parse($request->date) : Carbon::now();
-
-        $month = $date->month;
-        $year = $date->year;
-
-        // 1. Non-Credit Card Expenses for the current month
-        // logic: due_date in current month AND (credit_card_id is null) for the given user
+        // 1. Get all Debit Expenses (Grouped by Year-Month)
+        // logic: due_date in Month X, credit_card_id is null
         $debitExpenses = Bill::where('user_id', $user->id)
-            ->whereMonth('due_date', $month)
-            ->whereYear('due_date', $year)
             ->whereNull('credit_card_id')
-            ->sum('amount');
+            ->selectRaw('YEAR(due_date) as year, MONTH(due_date) as month, SUM(amount) as total')
+            ->groupBy('year', 'month')
+            ->orderBy('year', 'desc')
+            ->orderBy('month', 'desc')
+            ->get()
+            ->keyBy(function ($item) {
+                return $item->year . '-' . str_pad($item->month, 2, '0', STR_PAD_LEFT);
+            });
 
-        // 2. Credit Card Invoices from the *previous* month
-        // Logic: Sum of bills with credit_card_id where due_date is in the PREVIOUS month for the given user
-        // This represents the Credit Card Statement that is likely due/paid in the current month.
-
-        $prevDate = $date->copy()->subMonth();
-        $prevMonth = $prevDate->month;
-        $prevYear = $prevDate->year;
-
+        // 2. Get all Credit Card Expenses (Grouped by Year-Month)
+        // logic: due_date in Month X-1, credit_card_id is NOT null
+        // These are expenses MADE in Month X-1, but paid in Month X.
         $creditCardExpenses = Bill::where('user_id', $user->id)
-            ->whereMonth('due_date', $prevMonth)
-            ->whereYear('due_date', $prevYear)
             ->whereNotNull('credit_card_id')
-            ->sum('amount');
+            ->selectRaw('YEAR(due_date) as year, MONTH(due_date) as month, SUM(amount) as total')
+            ->groupBy('year', 'month')
+            ->get()
+            ->keyBy(function ($item) {
+                // To align with the report month (payment month), we shift this forward by 1 month.
+                // Expense in Jan 2024 (2024-01) -> Report for Feb 2024 (2024-02)
+                $date = Carbon::createFromDate($item->year, $item->month, 1)->addMonth();
+                return $date->year . '-' . str_pad($date->month, 2, '0', STR_PAD_LEFT);
+            });
 
-        $total = $debitExpenses + $creditCardExpenses;
+        // 3. Merge all relevant months
+        $allMonths = $debitExpenses->keys()->merge($creditCardExpenses->keys())->unique()->sort()->values();
 
-        // Calculate Salary Percentage
-        $salary = $user->salary;
-        $percentage = $salary > 0 ? round(($total / $salary) * 100, 2) : 0;
+        $reportData = [];
 
+        foreach ($allMonths as $monthKey) {
+            list($year, $month) = explode('-', $monthKey);
+            $year = (int)$year;
+            $month = (int)$month;
+
+            $debitAmount = isset($debitExpenses[$monthKey]) ? $debitExpenses[$monthKey]->total : 0;
+            $creditAmount = isset($creditCardExpenses[$monthKey]) ? $creditCardExpenses[$monthKey]->total : 0;
+
+            $total = $debitAmount + $creditAmount;
+
+            // Calculate Salary Percentage (using current salary)
+            $salary = $user->salary;
+            $percentage = $salary > 0 ? round(($total / $salary) * 100, 2) : 0;
+
+            $reportData[] = [
+                'month' => $month,
+                'year' => $year,
+                'user_salary' => $salary,
+                'debit_expenses_current_month' => $debitAmount,
+                'credit_card_invoice_previous_month' => $creditAmount, // This is expenses from Previous Month paid in This Month
+                'total_spend_for_month' => $total, // This is the total cash outflow for This Month
+                'spend_percentage_of_salary' => $percentage . '%',
+            ];
+        }
+
+        // Return most recent first
         return response()->json([
-            'month' => $month,
-            'year' => $year,
-            'user_salary' => $salary,
-            'debit_expenses_current_month' => $debitExpenses,
-            'credit_card_invoice_previous_month' => $creditCardExpenses,
-            'total_spend_for_month' => $total,
-            'spend_percentage_of_salary' => $percentage . '%',
-            'message' => 'Total calculated based on: (Non-Credit Card items due this month) + (Credit Card items from previous month)'
+            'data' => array_reverse($reportData),
+            'message' => 'Monthly spend history calculated based on: (Non-Credit Card items due in month X) + (Credit Card items from month X-1)'
         ]);
     }
 }
