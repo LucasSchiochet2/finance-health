@@ -16,10 +16,9 @@ class ReportController extends Controller
         // logic: due_date in Month X, credit_card_id is null
         $debitExpenses = Bill::where('user_id', $user->id)
             ->whereNull('credit_card_id')
-            ->selectRaw('YEAR(due_date) as year, MONTH(due_date) as month, SUM(amount) as total')
-            ->groupBy('year', 'month')
-            ->orderBy('year', 'desc')
-            ->orderBy('month', 'desc')
+            ->selectRaw('EXTRACT(YEAR FROM due_date) as year, EXTRACT(MONTH FROM due_date) as month, SUM(amount) as total')
+            ->groupByRaw('EXTRACT(YEAR FROM due_date), EXTRACT(MONTH FROM due_date)')
+            ->orderByRaw('1 DESC, 2 DESC')
             ->get()
             ->keyBy(function ($item) {
                 return $item->year . '-' . str_pad($item->month, 2, '0', STR_PAD_LEFT);
@@ -30,8 +29,8 @@ class ReportController extends Controller
         // These are expenses MADE in Month X-1, but paid in Month X.
         $creditCardExpenses = Bill::where('user_id', $user->id)
             ->whereNotNull('credit_card_id')
-            ->selectRaw('YEAR(due_date) as year, MONTH(due_date) as month, SUM(amount) as total')
-            ->groupBy('year', 'month')
+            ->selectRaw('EXTRACT(YEAR FROM due_date) as year, EXTRACT(MONTH FROM due_date) as month, SUM(amount) as total')
+            ->groupByRaw('EXTRACT(YEAR FROM due_date), EXTRACT(MONTH FROM due_date)')
             ->get()
             ->keyBy(function ($item) {
                 // To align with the report month (payment month), we shift this forward by 1 month.
