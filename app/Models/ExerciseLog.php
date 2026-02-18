@@ -13,7 +13,8 @@ class ExerciseLog extends Model
         'weight',
         'reps',
         'sets',
-        'observation'
+        'observation',
+        'intensity'
     ];
 
     public function user()

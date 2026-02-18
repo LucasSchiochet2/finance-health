@@ -23,7 +23,7 @@ class ExerciseController extends Controller
         // Apply search filter if present
         if ($request->has('search') && !empty($request->search)) {
             $search = $request->search;
-            $query->where('name', 'like', "%{$search}%");
+            $query->whereRaw('LOWER(name) LIKE ?', ['%' . strtolower($search) . '%']);
         }
 
         $exercises = $query->get();
@@ -106,6 +106,7 @@ class ExerciseController extends Controller
             'reps' => 'nullable|integer',
             'sets' => 'nullable|integer',
             'observation' => 'nullable|string',
+            'intensity' => 'nullable|numeric|min:0|max:10',
         ]);
 
         $log = new ExerciseLog($validated);
