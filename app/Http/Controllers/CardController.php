@@ -82,9 +82,7 @@ class CardController extends Controller
      */
     public function update(Request $request, User $user, Card $card)
     {
-        if ($card->user_id !== $user->id) {
-            return response()->json(['error' => 'Unauthorized'], 403);
-        }
+        
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'closing_day' => 'sometimes|required|date',
