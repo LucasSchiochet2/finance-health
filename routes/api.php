@@ -13,15 +13,18 @@ use Illuminate\Support\Facades\Route;
 
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
-    Route::get('/monthly-spend/{user}', [ReportController::class, 'getMonthlySpend']);
+
     Route::middleware('auth:sanctum')->group(function () {
         // Auth Routes (Protected)
 
     });
-        Route::get('/cards/{user}', [CardController::class, 'index']);
-        Route::post('/cards/{user}', [CardController::class, 'store']);
+        //--------- User Routes ---------
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/user', [AuthController::class, 'user']);
+        Route::get('/monthly-spend/{user}', [ReportController::class, 'getMonthlySpend']);
+        Route::put('/user/{user}', [AuthController::class, 'update']);
+
+        //--------- Bill Routes ---------
         Route::get('/bills/{user}', [BillController::class, 'index']);
         Route::post('/bills/{user}', [BillController::class, 'store']);
         Route::get('/bills/{user}/notify', [BillController::class, 'notify']);
@@ -30,6 +33,12 @@ use Illuminate\Support\Facades\Route;
         Route::put('/bills/{user}/{id}', [BillController::class, 'update']);
         Route::delete('/bills/{user}/{id}', [BillController::class, 'destroy']);
 
+        //--------- Card Routes ---------
+        Route::get('/cards/{user}', [CardController::class, 'index']);
+        Route::post('/cards/{user}', [CardController::class, 'store']);
+        Route::put('/cards/{user}/{id}', [CardController::class, 'update']);
+
+        //--------- Exercise Routes ---------
         Route::get('/exercises/{user}', [ExerciseController::class, 'index']);
         Route::get('/exercises/{user}/{id}', [ExerciseController::class, 'show']);
         Route::post('/exercises/{user}', [ExerciseController::class, 'store']);
@@ -37,7 +46,7 @@ use Illuminate\Support\Facades\Route;
         Route::get('/exercises/{user}/{id}/logs', [ExerciseController::class, 'getLogs']);
         Route::post('/exercises/{user}/{id}/logs', [ExerciseController::class, 'addLog']);
 
-
+        //--------- Workout Routes ---------
         Route::get('/workouts/{user}', [WorkoutController::class, 'index']);
         Route::post('/workouts/{user}', [WorkoutController::class, 'store']);
         Route::get('/workouts/{user}/{id}', [WorkoutController::class, 'show']);
