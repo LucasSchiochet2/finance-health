@@ -15,9 +15,6 @@ use Illuminate\Support\Facades\Route;
     Route::post('/login', [AuthController::class, 'login']);
 
     Route::middleware('auth:sanctum')->group(function () {
-        // Auth Routes (Protected)
-
-    });
         //--------- User Routes ---------
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/user', [AuthController::class, 'user']);
@@ -52,3 +49,5 @@ use Illuminate\Support\Facades\Route;
         Route::get('/workouts/{user}/{id}', [WorkoutController::class, 'show']);
         Route::put('/workouts/{user}/{id}', [WorkoutController::class, 'update']);
         Route::delete('/workouts/{user}/{workoutId}/exercises/{exerciseId}', [WorkoutController::class, 'removeExercise']);
+    });
+        
