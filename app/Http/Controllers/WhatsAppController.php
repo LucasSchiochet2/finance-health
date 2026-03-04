@@ -51,14 +51,16 @@ class WhatsAppController extends Controller
 
             Log::info("WhatsApp processing for user {$user->id}: $body");
 
-            $result = OpenAI::chat()->create([
-                'model' => 'gpt-3.5-turbo',
-                'messages' => [
-                    ['role' => 'system', 'content' => "Current date: " . now()->toDateString() . ". You always output valid JSON."],
-                    ['role' => 'user', 'content' => $prompt],
-                ],
-                'temperature' => 0.1,
-            ]);
+            $result = retry(3, function () use ($prompt) {
+                return OpenAI::chat()->create([
+                    'model' => 'gpt-3.5-turbo',
+                    'messages' => [
+                        ['role' => 'system', 'content' => "Current date: " . now()->toDateString() . ". You always output valid JSON."],
+                        ['role' => 'user', 'content' => $prompt],
+                    ],
+                    'temperature' => 0.1,
+                ]);
+            }, 2000);
 
             Log::info("WhatsApp: OpenAI response: " . json_encode($result->choices[0]->message->content));
 
@@ -104,10 +106,17 @@ class WhatsAppController extends Controller
 
         } catch (\Exception $e) {
             Log::error("WhatsApp Error: " . $e->getMessage());
-            // Send exact error to user for debugging in production
-            $errorMsg = substr($e->getMessage(), 0, 200);
-            $this->sendWhatsAppMessage($from, "Erro ao processar: $errorMsg");
-            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+            $errorMsg = $e->getMessage();
+
+            if (str_contains(strtolower($errorMsg), 'rate limit')) {
+                $this->sendWhatsAppMessage($from, "⚠️ O limite de requisições foi atingido. Por favor, tente novamente em alguns instantes.");
+            } elseif (str_contains(strtolower($errorMsg), 'quota')) {
+                 $this->sendWhatsAppMessage($from, "⚠️ Erro de cota da API. Verifique os créditos da OpenAI.");
+            } else {
+                 $this->sendWhatsAppMessage($from, "Erro ao processar: " . substr($errorMsg, 0, 200));
+            }
+
+            return response()->json(['status' => 'error', 'message' => $errorMsg], 500);
         }
     }
 
@@ -117,7 +126,7 @@ class WhatsAppController extends Controller
             $sid = config('services.twilio.sid');
             $token = config('services.twilio.token');
             $waNumber = config('services.twilio.whatsapp_number');
-            
+
             Log::info("WhatsApp: Attempting to send message to $to from $waNumber");
 
             if (!$sid || !$token || !$waNumber) {
