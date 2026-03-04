@@ -6,6 +6,7 @@ use App\Http\Controllers\CardController;
 use App\Http\Controllers\ExerciseController;
 use App\Http\Controllers\WorkoutController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\WhatsAppController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -50,4 +51,5 @@ use Illuminate\Support\Facades\Route;
         Route::put('/workouts/{user}/{id}', [WorkoutController::class, 'update']);
         Route::delete('/workouts/{user}/{workoutId}/exercises/{exerciseId}', [WorkoutController::class, 'removeExercise']);
     });
-        
+
+    Route::post('/whatsapp/webhook', [WhatsAppController::class, 'handle']);
