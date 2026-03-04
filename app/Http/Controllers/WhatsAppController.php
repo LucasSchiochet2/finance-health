@@ -60,6 +60,8 @@ class WhatsAppController extends Controller
                 'temperature' => 0.1,
             ]);
 
+            Log::info("WhatsApp: OpenAI response: " . json_encode($result->choices[0]->message->content));
+
             $responseContent = $result->choices[0]->message->content;
 
             // Clean markdown if present
@@ -96,6 +98,7 @@ class WhatsAppController extends Controller
             $message = "✅ *Compra registrada!* \n🏷️ {$bill->name}\n💰 R$ " . number_format((float)$bill->amount, 2, ',', '.') . "\n📂 {$category->name}\n📅 " . \Carbon\Carbon::parse($bill->due_date)->format('d/m/Y');
 
             $this->sendWhatsAppMessage($from, $message);
+            Log::info("WhatsApp: Bill created and message queued for $from");
 
             return response()->json(['status' => 'success', 'bill_id' => $bill->id]);
 
@@ -104,8 +107,21 @@ class WhatsAppController extends Controller
             // Send exact error to user for debugging in production
             $errorMsg = substr($e->getMessage(), 0, 200);
             $this->sendWhatsAppMessage($from, "Erro ao processar: $errorMsg");
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    private function sendWhatsAppMessage($to, $message)
+    {
+        try {
+            $sid = config('services.twilio.sid');
+            $token = config('services.twilio.token');
+            $waNumber = config('services.twilio.whatsapp_number');
+            
+            Log::info("WhatsApp: Attempting to send message to $to from $waNumber");
+
             if (!$sid || !$token || !$waNumber) {
-                Log::error("Twilio credentials missing");
+                Log::error("Twilio credentials missing. SID: " . ($sid ? 'Set' : 'Missing') . ", Number: $waNumber");
                 return;
             }
 
