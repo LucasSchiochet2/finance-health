@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Twilio\Rest\Client;
 use OpenAI\Laravel\Facades\OpenAI;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class WhatsAppController extends Controller
 {
@@ -21,12 +22,12 @@ class WhatsAppController extends Controller
             return response()->json(['status' => 'invalid_request'], 400);
         }
 
-        // Clean phone number (remove 'whatsapp:')
+        // Limpa o número de telefone (remove 'whatsapp:')
         $phone = str_replace('whatsapp:', '', $from);
 
-        // Try to match phone with or without +
+        // Tenta encontrar o usuário de várias formas
         $user = User::where('phone', $phone)
-                    ->orWhere('phone', '+'.$phone)
+                    ->orWhere('phone', '+' . $phone)
                     ->orWhere('phone', ltrim($phone, '+'))
                     ->first();
 
@@ -37,91 +38,107 @@ class WhatsAppController extends Controller
         }
 
         try {
-            $apiKey = config('openai.api_key');
+            $apiKey = config('openai.api_key') ?? env('OPENAI_API_KEY');
             if (!$apiKey) {
-                // Determine if it might be in env directly (in case config cache missed it)
-                $apiKey = env('OPENAI_API_KEY');
-                if (!$apiKey) {
-                   throw new \Exception("OpenAI API Key not configured.");
-                }
+                throw new \Exception("OpenAI API Key not configured.");
             }
 
+            // Define a data atual para injeção no prompt
+            $currentDate = now()->toDateString();
+            
+            // Busca categorias e monta lista de cartões com IDs (ex: "ID 1: Nubank, ID 2: Itaú")
             $categories = CategoryBill::pluck('name')->implode(', ');
+            $userCards = $user->cards->map(fn($card) => "ID {$card->id}: {$card->name}")->implode(' | ');
+
             $prompt = "Você é um assistente financeiro especializado em extração de dados.
-                        Analise o texto do usuário e extraia os detalhes da despesa para um formato JSON estrito.
-                        Texto do Usuário: \"$body\"
-                        Data de Hoje: \"$current_date\"
-                        Categorias Disponíveis: $categories
-                        Catões do Usario: {$user->cards->pluck('name')->implode(', ')}
-                        Extraia e mapeie para as seguintes chaves JSON:
-                        - \"name\": Título curto e claro da despesa.
-                        - \"description\": Detalhes adicionais mencionados (ou null).
-                        - \"amount\": Apenas número (float), use ponto para decimais (ex: 150.50).
-                        - \"due_date\": Formato YYYY-MM-DD. Calcule dias relativos (\"amanhã\", \"dia 15\") com base na Data de Hoje. Use a Data de Hoje se nenhuma for sugerida.
-                        - \"category\": A que melhor se encaixar nas Categorias Disponíveis, ou \"Outros\".
-                        - \"paid\": true se o texto disser que já foi pago, false caso contrário.
-                        - \"payment_method\": Método citado (ex: \"pix\", \"credit_card\", \"boleto\") ou null.
-                        - \"is_recurring\": true se for uma conta fixa mensal/recorrente, false caso contrário.
-                        - \"is_installment\": true se for uma compra parcelada (ex: \"em 10x\").
-                        - \"installment_count\": Número total de parcelas (integer) ou null.
-                        - \"credit_card_id\": ID do cartão mencionado, se aplicável (verifique os cartões do usuário).
-                        REGRAS OBRIGATÓRIAS:
-                        1. Retorne APENAS o JSON válido.
-                        2. NÃO use formatação markdown (sem ```json).
-                        3. Não adicione nenhuma palavra antes ou depois do JSON.";
+            Analise o texto do usuário e extraia os detalhes da despesa para um formato JSON estrito.
+
+            Texto do Usuário: \"$body\"
+            Data de Hoje: \"$currentDate\"
+            Categorias Disponíveis: $categories
+            Cartões do Usuário: $userCards
+
+            Extraia e mapeie para as seguintes chaves JSON:
+            - \"name\": Título curto e claro da despesa.
+            - \"description\": Detalhes adicionais mencionados (ou null).
+            - \"amount\": Apenas número (float), use ponto para decimais (ex: 150.50).
+            - \"due_date\": Formato YYYY-MM-DD. Calcule dias relativos com base na Data de Hoje. Use a Data de Hoje se nenhuma for sugerida.
+            - \"category\": A que melhor se encaixar nas Categorias Disponíveis, ou \"Outros\".
+            - \"paid\": true se o texto disser que já foi pago, false caso contrário.
+            - \"payment_method\": Método citado (ex: \"pix\", \"credit_card\", \"boleto\", \"dinheiro\") ou null.
+            - \"is_recurring\": true se for uma conta fixa mensal/recorrente, false caso contrário.
+            - \"is_installment\": true se for uma compra parcelada (ex: \"em 10x\").
+            - \"installment_count\": Número total de parcelas (integer) ou null.
+            - \"credit_card_id\": O ID numérico correspondente ao cartão mencionado na lista acima (ou null se não for cartão de crédito).
+
+            REGRAS OBRIGATÓRIAS:
+            1. Retorne APENAS o JSON válido.
+            2. NÃO use formatação markdown (sem ```json).
+            3. Não adicione nenhuma palavra antes ou depois do JSON.";
 
             Log::info("WhatsApp processing for user {$user->id}: $body");
 
-            $result = retry(3, function () use ($prompt) {
+            $result = retry(3, function () use ($prompt, $currentDate) {
                 return OpenAI::chat()->create([
                     'model' => 'gpt-3.5-turbo',
                     'messages' => [
-                        ['role' => 'system', 'content' => "Current date: " . now()->toDateString() . ". You always output valid JSON."],
+                        ['role' => 'system', 'content' => "Current date: $currentDate. You always output valid strict JSON only."],
                         ['role' => 'user', 'content' => $prompt],
                     ],
-                    'temperature' => 0.1,
+                    'temperature' => 0.1, // Temperatura baixa para respostas mais determinísticas/precisas
                 ]);
             }, 2000);
 
-            Log::info("WhatsApp: OpenAI response: " . json_encode($result->choices[0]->message->content));
+            $responseContent = trim($result->choices[0]->message->content);
 
-            $responseContent = $result->choices[0]->message->content;
-
-            // Clean markdown if present
+            // Limpeza de possíveis formatações markdown residuais
             $responseContent = str_replace(['```json', '```'], '', $responseContent);
 
             $data = json_decode($responseContent, true);
 
-            if (!$data || !isset($data['amount'])) {
+            if (json_last_error() !== JSON_ERROR_NONE || !isset($data['amount'])) {
                 Log::error("WhatsApp Parse Fail: $responseContent");
-                $this->sendWhatsAppMessage($from, "Não entendi. Tente: 'Mercado 100,50' ou 'Gasolina 50'.");
+                $this->sendWhatsAppMessage($from, "Não consegui entender completamente. Tente algo como: 'Comprei mercado por 100,50 no pix' ou 'Gasolina 50 reais cartão Nubank'.");
                 return response()->json(['status' => 'parsed_error']);
             }
 
-            // Sanitize amount (replace comma with dot if AI failed to do so)
-            $amount = str_replace(',', '.', $data['amount']);
-            // Remove non-numeric chars except dot
+            // Higienização do valor monetário
+            $amount = str_replace(',', '.', (string)$data['amount']);
             $amount = preg_replace('/[^0-9.]/', '', $amount);
 
-            // Find or create category
+            // Encontra ou cria a categoria associada
             $categoryName = $data['category'] ?? 'Outros';
             $category = CategoryBill::firstOrCreate(['name' => $categoryName]);
 
+            // Cria o registro da despesa preenchendo o máximo de dados que a IA extraiu
             $bill = Bill::create([
-                'user_id' => $user->id,
-                'name' => $data['name'] ?? 'Compra WhatsApp',
-                'amount' => $amount,
-                'category_bill_id' => $category->id,
-                'due_date' => $data['due_date'] ?? now()->toDateString(),
-                'description' => "Original: $body",
-                'is_recurring' => 0,
-                'paid' => 0,
+                'user_id'           => $user->id,
+                'name'              => $data['name'] ?? 'Despesa WhatsApp',
+                'description'       => $data['description'] ?? "Registrado via WhatsApp: $body",
+                'amount'            => $amount,
+                'category_bill_id'  => $category->id,
+                'due_date'          => $data['due_date'] ?? $currentDate,
+                'is_recurring'      => $data['is_recurring'] ?? false,
+                'paid'              => $data['paid'] ?? false,
+                'payment_method'    => $data['payment_method'] ?? null,
+                'is_installment'    => $data['is_installment'] ?? false,
+                'installment_count' => $data['installment_count'] ?? null,
+                'credit_card_id'    => $data['credit_card_id'] ?? null,
             ]);
 
-            $message = "✅ *Compra registrada!* \n🏷️ {$bill->name}\n💰 R$ " . number_format((float)$bill->amount, 2, ',', '.') . "\n📂 {$category->name}\n📅 " . \Carbon\Carbon::parse($bill->due_date)->format('d/m/Y');
+            // Monta mensagem de confirmação enriquecida
+            $statusPago = $bill->paid ? "✅ (Pago)" : "⏳ (Pendente)";
+            $parcelas = $bill->is_installment ? "\n🔢 Parcelas: {$bill->installment_count}x" : "";
+            
+            $message = "✅ *Despesa registrada!*\n"
+                     . "🏷️ {$bill->name}\n"
+                     . "💰 R$ " . number_format((float)$bill->amount, 2, ',', '.') . " $statusPago\n"
+                     . "📂 {$category->name}\n"
+                     . "📅 " . Carbon::parse($bill->due_date)->format('d/m/Y')
+                     . $parcelas;
 
             $this->sendWhatsAppMessage($from, $message);
-            Log::info("WhatsApp: Bill created and message queued for $from");
+            Log::info("WhatsApp: Bill created ({$bill->id}) and message queued for $from");
 
             return response()->json(['status' => 'success', 'bill_id' => $bill->id]);
 
@@ -130,11 +147,11 @@ class WhatsAppController extends Controller
             $errorMsg = $e->getMessage();
 
             if (str_contains(strtolower($errorMsg), 'rate limit')) {
-                $this->sendWhatsAppMessage($from, "⚠️ O limite de requisições foi atingido. Por favor, tente novamente em alguns instantes.");
+                $this->sendWhatsAppMessage($from, "⚠️ O limite do sistema foi atingido. Por favor, tente novamente em alguns instantes.");
             } elseif (str_contains(strtolower($errorMsg), 'quota')) {
-                 $this->sendWhatsAppMessage($from, "⚠️ Erro de cota da API. Verifique os créditos da OpenAI.");
+                $this->sendWhatsAppMessage($from, "⚠️ Erro de comunicação com a inteligência artificial. Entre em contato com o suporte.");
             } else {
-                 $this->sendWhatsAppMessage($from, "Erro ao processar: " . substr($errorMsg, 0, 200));
+                $this->sendWhatsAppMessage($from, "Ocorreu um erro ao processar sua despesa. Tente novamente mais tarde.");
             }
 
             return response()->json(['status' => 'error', 'message' => $errorMsg], 500);
@@ -148,10 +165,8 @@ class WhatsAppController extends Controller
             $token = config('services.twilio.token');
             $waNumber = config('services.twilio.whatsapp_number');
 
-            Log::info("WhatsApp: Attempting to send message to $to from $waNumber");
-
             if (!$sid || !$token || !$waNumber) {
-                Log::error("Twilio credentials missing. SID: " . ($sid ? 'Set' : 'Missing') . ", Number: $waNumber");
+                Log::error("Twilio credentials missing.");
                 return;
             }
 
