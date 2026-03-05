@@ -5,10 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\Bill;
 use App\Models\User;
 use App\Models\CategoryBill;
+use App\Models\Card; // Importação do model Card
 use Illuminate\Http\Request;
 use Twilio\Rest\Client;
 use OpenAI\Laravel\Facades\OpenAI;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str; // Importação para gerar o group_id das parcelas
 use Carbon\Carbon;
 
 class WhatsAppController extends Controller
@@ -46,9 +48,16 @@ class WhatsAppController extends Controller
             // Define a data atual para injeção no prompt
             $currentDate = now()->toDateString();
             
-            // Busca categorias e monta lista de cartões com IDs (ex: "ID 1: Nubank, ID 2: Itaú")
+            // Busca categorias
             $categories = CategoryBill::pluck('name')->implode(', ');
-            $userCards = $user->cards->map(fn($card) => "ID {$card->id}: {$card->name}")->implode(' | ');
+
+            // Busca cartões direto do model Card com where
+            $cards = Card::where('user_id', $user->id)->get();
+            $userCards = $cards->map(fn($card) => "ID {$card->id}: {$card->name}")->implode(' | ');
+
+            if (empty($userCards)) {
+                $userCards = "Nenhum cartão cadastrado.";
+            }
 
             $prompt = "Você é um assistente financeiro especializado em extração de dados.
             Analise o texto do usuário e extraia os detalhes da despesa para um formato JSON estrito.
@@ -61,7 +70,7 @@ class WhatsAppController extends Controller
             Extraia e mapeie para as seguintes chaves JSON:
             - \"name\": Título curto e claro da despesa.
             - \"description\": Detalhes adicionais mencionados (ou null).
-            - \"amount\": Apenas número (float), use ponto para decimais (ex: 150.50).
+            - \"amount\": Valor TOTAL da compra. Apenas número (float), use ponto para decimais (ex: 150.50).
             - \"due_date\": Formato YYYY-MM-DD. Calcule dias relativos com base na Data de Hoje. Use a Data de Hoje se nenhuma for sugerida.
             - \"category\": A que melhor se encaixar nas Categorias Disponíveis, ou \"Outros\".
             - \"paid\": true se o texto disser que já foi pago, false caso contrário.
@@ -85,7 +94,7 @@ class WhatsAppController extends Controller
                         ['role' => 'system', 'content' => "Current date: $currentDate. You always output valid strict JSON only."],
                         ['role' => 'user', 'content' => $prompt],
                     ],
-                    'temperature' => 0.1, // Temperatura baixa para respostas mais determinísticas/precisas
+                    'temperature' => 0.1,
                 ]);
             }, 2000);
 
@@ -102,37 +111,79 @@ class WhatsAppController extends Controller
                 return response()->json(['status' => 'parsed_error']);
             }
 
-            // Higienização do valor monetário
-            $amount = str_replace(',', '.', (string)$data['amount']);
-            $amount = preg_replace('/[^0-9.]/', '', $amount);
+            // Higienização do valor monetário TOTAL
+            $amountTotal = str_replace(',', '.', (string)$data['amount']);
+            $amountTotal = (float) preg_replace('/[^0-9.]/', '', $amountTotal);
 
             // Encontra ou cria a categoria associada
             $categoryName = $data['category'] ?? 'Outros';
             $category = CategoryBill::firstOrCreate(['name' => $categoryName]);
 
-            // Cria o registro da despesa preenchendo o máximo de dados que a IA extraiu
-            $bill = Bill::create([
-                'user_id'           => $user->id,
-                'name'              => $data['name'] ?? 'Despesa WhatsApp',
-                'description'       => $data['description'] ?? "Registrado via WhatsApp: $body",
-                'amount'            => $amount,
-                'category_bill_id'  => $category->id,
-                'due_date'          => $data['due_date'] ?? $currentDate,
-                'is_recurring'      => $data['is_recurring'] ?? false,
-                'paid'              => $data['paid'] ?? false,
-                'payment_method'    => $data['payment_method'] ?? null,
-                'is_installment'    => $data['is_installment'] ?? false,
-                'installment_count' => $data['installment_count'] ?? null,
-                'credit_card_id'    => $data['credit_card_id'] ?? null,
-            ]);
+            $isInstallment = $data['is_installment'] ?? false;
+            $installmentCount = (int) ($data['installment_count'] ?? 1);
+            $bill = null; // Guardará a primeira parcela para retornar na mensagem
+            $amountForMessage = $amountTotal; // O que vai aparecer no WhatsApp
+
+            // Lógica de Criação: Parcelado vs Normal
+            if ($isInstallment && $installmentCount > 1) {
+                $groupId = (string) Str::uuid(); // Agrupa todas as parcelas
+                $amountPerInstallment = round($amountTotal / $installmentCount, 2);
+                $amountForMessage = $amountPerInstallment;
+
+                for ($i = 1; $i <= $installmentCount; $i++) {
+                    // Adiciona X meses à data original
+                    $dueDate = Carbon::parse($data['due_date'] ?? $currentDate)->addMonths($i - 1)->toDateString();
+
+                    $createdBill = Bill::create([
+                        'user_id'           => $user->id,
+                        'name'              => ($data['name'] ?? 'Despesa WhatsApp') . " ($i/$installmentCount)",
+                        'description'       => $data['description'] ?? "Registrado via WhatsApp: $body",
+                        'amount'            => $amountPerInstallment,
+                        'category_bill_id'  => $category->id,
+                        'due_date'          => $dueDate,
+                        'is_recurring'      => $data['is_recurring'] ?? false,
+                        'paid'              => ($i === 1) ? ($data['paid'] ?? false) : false, // Só a primeira pode estar paga na criação
+                        'payment_method'    => $data['payment_method'] ?? null,
+                        'is_installment'    => true,
+                        'installment_count' => $installmentCount,
+                        'installment_current'=> $i,
+                        'group_id'          => $groupId,
+                        'credit_card_id'    => $data['credit_card_id'] ?? null,
+                    ]);
+
+                    if ($i === 1) {
+                        $bill = $createdBill;
+                    }
+                }
+            } else {
+                // Registro Normal (À vista / Recorrente não parcelado)
+                $bill = Bill::create([
+                    'user_id'           => $user->id,
+                    'name'              => $data['name'] ?? 'Despesa WhatsApp',
+                    'description'       => $data['description'] ?? "Registrado via WhatsApp: $body",
+                    'amount'            => $amountTotal,
+                    'category_bill_id'  => $category->id,
+                    'due_date'          => $data['due_date'] ?? $currentDate,
+                    'is_recurring'      => $data['is_recurring'] ?? false,
+                    'paid'              => $data['paid'] ?? false,
+                    'payment_method'    => $data['payment_method'] ?? null,
+                    'is_installment'    => false,
+                    'installment_count' => null,
+                    'installment_current'=> null,
+                    'group_id'          => null,
+                    'credit_card_id'    => $data['credit_card_id'] ?? null,
+                ]);
+            }
 
             // Monta mensagem de confirmação enriquecida
             $statusPago = $bill->paid ? "✅ (Pago)" : "⏳ (Pendente)";
-            $parcelas = $bill->is_installment ? "\n🔢 Parcelas: {$bill->installment_count}x" : "";
+            $parcelas = ($isInstallment && $installmentCount > 1) 
+                ? "\n🔢 Parcelado em: {$installmentCount}x de R$ " . number_format($amountForMessage, 2, ',', '.') . "\n💰 Total: R$ " . number_format($amountTotal, 2, ',', '.') 
+                : "";
             
             $message = "✅ *Despesa registrada!*\n"
                      . "🏷️ {$bill->name}\n"
-                     . "💰 R$ " . number_format((float)$bill->amount, 2, ',', '.') . " $statusPago\n"
+                     . "💳 R$ " . number_format((float) ($isInstallment ? $amountForMessage : $amountTotal), 2, ',', '.') . " $statusPago\n"
                      . "📂 {$category->name}\n"
                      . "📅 " . Carbon::parse($bill->due_date)->format('d/m/Y')
                      . $parcelas;
