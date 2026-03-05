@@ -47,7 +47,28 @@ class WhatsAppController extends Controller
             }
 
             $categories = CategoryBill::pluck('name')->implode(', ');
-            $prompt = "You are a financial assistant. User says: \"$body\". Extract: name (short description), amount (number only, use dot for decimals), category (best match from: $categories, or 'Outros'), due_date (YYYY-MM-DD, default to today if not explicit). Return JSON only.";
+            $prompt = "Você é um assistente financeiro especializado em extração de dados.
+                        Analise o texto do usuário e extraia os detalhes da despesa para um formato JSON estrito.
+                        Texto do Usuário: \"$body\"
+                        Data de Hoje: \"$current_date\"
+                        Categorias Disponíveis: $categories
+                        Catões do Usario: {$user->cards->pluck('name')->implode(', ')}
+                        Extraia e mapeie para as seguintes chaves JSON:
+                        - \"name\": Título curto e claro da despesa.
+                        - \"description\": Detalhes adicionais mencionados (ou null).
+                        - \"amount\": Apenas número (float), use ponto para decimais (ex: 150.50).
+                        - \"due_date\": Formato YYYY-MM-DD. Calcule dias relativos (\"amanhã\", \"dia 15\") com base na Data de Hoje. Use a Data de Hoje se nenhuma for sugerida.
+                        - \"category\": A que melhor se encaixar nas Categorias Disponíveis, ou \"Outros\".
+                        - \"paid\": true se o texto disser que já foi pago, false caso contrário.
+                        - \"payment_method\": Método citado (ex: \"pix\", \"credit_card\", \"boleto\") ou null.
+                        - \"is_recurring\": true se for uma conta fixa mensal/recorrente, false caso contrário.
+                        - \"is_installment\": true se for uma compra parcelada (ex: \"em 10x\").
+                        - \"installment_count\": Número total de parcelas (integer) ou null.
+                        - \"credit_card_id\": ID do cartão mencionado, se aplicável (verifique os cartões do usuário).
+                        REGRAS OBRIGATÓRIAS:
+                        1. Retorne APENAS o JSON válido.
+                        2. NÃO use formatação markdown (sem ```json).
+                        3. Não adicione nenhuma palavra antes ou depois do JSON.";
 
             Log::info("WhatsApp processing for user {$user->id}: $body");
 
