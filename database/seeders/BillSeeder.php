@@ -121,6 +121,7 @@ class BillSeeder extends Seeder
             Bill::create([
                 'name' => $billData['name'],
                 'amount' => $billData['amount'],
+                'category_name' => $categories[$billData['category_index']]->name,
                 'category_bill_id' => $categories[$billData['category_index']]->id,
                 'user_id' => 1,
                 'due_date' => $billData['due_date'],

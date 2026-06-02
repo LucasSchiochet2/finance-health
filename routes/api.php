@@ -30,6 +30,7 @@ use Illuminate\Support\Facades\Route;
         Route::get('/bills/{user}', [BillController::class, 'index']);
         Route::post('/bills/{user}', [BillController::class, 'store']);
         Route::get('/bills/{user}/notify', [BillController::class, 'notify']);
+        Route::get('/bills/{user}/spending-by-category', [BillController::class, 'spendingByCategory']);
         Route::get('/bills/{user}/category/{categoryId}', [BillController::class, 'showByCategory']);
         Route::get('/bills/{user}/{id}', [BillController::class, 'show']);
         Route::put('/bills/{user}/{id}', [BillController::class, 'update']);

@@ -64,6 +64,7 @@ class BillController extends Controller
             'name' => 'required|string|max:255',
             'amount' => 'required|numeric',
             'due_date' => 'required|date',
+            'category_name' => 'nullable|string|max:255',
             'category_bill_id' => 'required|exists:category_bills,id',
             'credit_card_id' => 'nullable|exists:credit_cards,id',
             'notification_enabled' => 'nullable|boolean',
@@ -158,12 +159,82 @@ class BillController extends Controller
         ]);
     }
 
+    public function spendingByCategory(Request $request, User $user)
+    {
+        $filters = $request->validate([
+            'month' => 'nullable|date_format:Y-m',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'category_name' => 'nullable|string|max:255',
+            'paid' => 'nullable|boolean',
+            'payment_method' => 'nullable|string|max:255',
+            'credit_card_id' => 'nullable|exists:credit_cards,id',
+        ]);
+
+        $query = Bill::where('user_id', $user->id);
+
+        if (!empty($filters['month'])) {
+            $query->where('due_date', 'like', "{$filters['month']}%");
+        }
+
+        if (!empty($filters['start_date'])) {
+            $query->whereDate('due_date', '>=', $filters['start_date']);
+        }
+
+        if (!empty($filters['end_date'])) {
+            $query->whereDate('due_date', '<=', $filters['end_date']);
+        }
+
+        if (!empty($filters['category_name'])) {
+            $query->where('category_name', $filters['category_name']);
+        }
+
+        if ($request->has('paid')) {
+            $query->where('paid', filter_var($filters['paid'], FILTER_VALIDATE_BOOLEAN));
+        }
+
+        if (!empty($filters['payment_method'])) {
+            $query->where('payment_method', $filters['payment_method']);
+        }
+
+        if (!empty($filters['credit_card_id'])) {
+            $query->where('credit_card_id', $filters['credit_card_id']);
+        }
+
+        $bills = $query->get();
+        $totalAmount = $bills->sum('amount');
+
+        $summary = $bills
+            ->groupBy(function ($bill) {
+                return $bill->category_name ?: 'Sem Categoria';
+            })
+            ->map(function ($group, $categoryName) use ($totalAmount) {
+                $categoryTotal = $group->sum('amount');
+
+                return [
+                    'category_name' => $categoryName,
+                    'total_amount' => $categoryTotal,
+                    'percentage' => $totalAmount > 0 ? round(($categoryTotal / $totalAmount) * 100, 2) : 0,
+                    'count' => $group->count(),
+                ];
+            })
+            ->sortByDesc('total_amount')
+            ->values();
+
+        return response()->json([
+            'total_amount' => $totalAmount,
+            'total_count' => $bills->count(),
+            'data' => $summary,
+        ]);
+    }
+
     /**
      * Update the specified resource in storage.
      */
     public function update(Request $request, string $userId, string $id)
     {
         $validated = $request->validate([
+            'category_name' => 'nullable|string|max:255',
             'credit_card_id' => 'nullable|exists:credit_cards,id',
         ]);
 
@@ -185,6 +256,7 @@ class BillController extends Controller
                 // Update common fields
                 $b->name = $bill->name;
                 $b->amount = $bill->amount;
+                $b->category_name = $bill->category_name;
                 $b->category_bill_id = $bill->category_bill_id;
                 $b->credit_card_id = $bill->credit_card_id;
                 // Add other shared fields if necessary

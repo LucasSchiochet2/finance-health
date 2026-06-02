@@ -21,6 +21,7 @@ class Bill extends Model
         'installment_count',
         'installment_current',
         'group_id',
+        'category_name',
         'category_bill_id',
         'user_id',
         'credit_card_id',

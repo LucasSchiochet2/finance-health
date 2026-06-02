@@ -42,6 +42,7 @@ class BillCrudController extends CrudController
     CRUD::column('name');
     CRUD::column('amount');
     CRUD::column('due_date');
+    CRUD::column('category_name')->label('Categoria Texto');
 
     CRUD::column('category_bill_id')
         ->type('select')
@@ -79,6 +80,7 @@ class BillCrudController extends CrudController
 
     CRUD::field('name')->label('Nome da Conta');
     CRUD::field('description')->label('Descrição');
+    CRUD::field('category_name')->type('text')->label('Categoria Texto');
     CRUD::field('amount')->type('number')->label('Valor');
     CRUD::field('due_date')->type('date')->label('Data de Vencimento');
     CRUD::field('notification_enabled')->type('checkbox')->label('Notificar?');
