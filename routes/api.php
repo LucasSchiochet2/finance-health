@@ -5,6 +5,7 @@ use App\Http\Controllers\BillController;
 use App\Http\Controllers\CardController;
 use App\Http\Controllers\DietMealController;
 use App\Http\Controllers\ExerciseController;
+use App\Http\Controllers\InvestmentController;
 use App\Http\Controllers\WorkoutController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\WhatsAppController;
@@ -26,6 +27,16 @@ use Illuminate\Support\Facades\Route;
         Route::get('/user', [AuthController::class, 'user']);
         Route::get('/monthly-spend/{user}', [ReportController::class, 'getMonthlySpend']);
         Route::put('/user/{user}', [AuthController::class, 'update']);
+
+        //--------- Investment Routes ---------
+        Route::get('/investments/{user}/summary', [InvestmentController::class, 'summary']);
+        Route::get('/investments/{user}/goal', [InvestmentController::class, 'goal']);
+        Route::put('/investments/{user}/goal', [InvestmentController::class, 'updateGoal']);
+        Route::get('/investments/{user}', [InvestmentController::class, 'index']);
+        Route::post('/investments/{user}', [InvestmentController::class, 'store']);
+        Route::get('/investments/{user}/{id}', [InvestmentController::class, 'show']);
+        Route::put('/investments/{user}/{id}', [InvestmentController::class, 'update']);
+        Route::delete('/investments/{user}/{id}', [InvestmentController::class, 'destroy']);
 
         //--------- Bill Routes ---------
         Route::get('/bills/{user}', [BillController::class, 'index']);

@@ -12,12 +12,30 @@ class BillController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(User $user)
+    public function index(Request $request, User $user)
     {
-        $bills = Bill::where('user_id', $user->id)
+        $filters = $request->validate([
+            'category_name' => 'nullable|string|max:255',
+            'bill_type' => 'nullable|string|max:50',
+        ]);
+
+        $query = Bill::where('user_id', $user->id)
             ->with(['category', 'creditCard'])
-            ->orderBy('due_date', 'asc')
-            ->get();
+            ->orderBy('due_date', 'asc');
+
+        if (!empty($filters['category_name'])) {
+            $query->where('category_name', $filters['category_name']);
+        }
+
+        if (!empty($filters['bill_type'])) {
+            $categoryNames = $this->categoryNamesForBillType($filters['bill_type']);
+
+            if ($categoryNames) {
+                $query->whereRaw('LOWER(category_name) in (' . implode(',', array_fill(0, count($categoryNames), '?')) . ')', $categoryNames);
+            }
+        }
+
+        $bills = $query->get();
 
         $grouped = $bills->groupBy(function ($bill) {
             return \Carbon\Carbon::parse($bill->due_date)->format('Y-m');
@@ -53,6 +71,15 @@ class BillController extends Controller
         return response()->json([
              'data' => $monthlyData->values()
         ]);
+    }
+
+    private function categoryNamesForBillType(string $billType): array
+    {
+        return match (strtolower($billType)) {
+            'fixa', 'fixas', 'fixed' => ['fixa', 'fixas'],
+            'variavel', 'variaveis', 'variável', 'variáveis', 'variable' => ['variavel', 'variaveis', 'variável', 'variáveis'],
+            default => [],
+        };
     }
 
     /**
