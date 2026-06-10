@@ -49,4 +49,9 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    public function dietMeals()
+    {
+        return $this->hasMany(DietMeal::class);
+    }
 }

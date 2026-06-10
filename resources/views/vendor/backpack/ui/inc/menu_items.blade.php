@@ -9,3 +9,4 @@
 
 <x-backpack::menu-item title="Exercises" icon="la la-question" :link="backpack_url('exercise')" />
 <x-backpack::menu-item title="Workouts" icon="la la-question" :link="backpack_url('workout')" />
+<x-backpack::menu-item title="Dieta" icon="la la-question" :link="backpack_url('diet-meal')" />

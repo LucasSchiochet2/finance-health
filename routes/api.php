@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BillController;
 use App\Http\Controllers\CardController;
+use App\Http\Controllers\DietMealController;
 use App\Http\Controllers\ExerciseController;
 use App\Http\Controllers\WorkoutController;
 use App\Http\Controllers\ReportController;
@@ -40,6 +41,14 @@ use Illuminate\Support\Facades\Route;
         Route::get('/cards/{user}', [CardController::class, 'index']);
         Route::post('/cards/{user}', [CardController::class, 'store']);
         Route::put('/cards/{user}/{id}', [CardController::class, 'update']);
+
+        //--------- Diet Routes ---------
+        Route::get('/diet/{user}/charts', [DietMealController::class, 'charts']);
+        Route::get('/diet/{user}', [DietMealController::class, 'index']);
+        Route::post('/diet/{user}', [DietMealController::class, 'store']);
+        Route::get('/diet/{user}/{id}', [DietMealController::class, 'show']);
+        Route::put('/diet/{user}/{id}', [DietMealController::class, 'update']);
+        Route::delete('/diet/{user}/{id}', [DietMealController::class, 'destroy']);
 
         //--------- Exercise Routes ---------
         Route::get('/exercises/{user}', [ExerciseController::class, 'index']);

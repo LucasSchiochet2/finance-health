@@ -22,6 +22,7 @@ Route::group([
     Route::crud('card', 'CardCrudController');
     Route::crud('exercise', 'ExerciseCrudController');
     Route::crud('workout', 'WorkoutCrudController');
+    Route::crud('diet-meal', 'DietMealCrudController');
 }); // this should be the absolute last line of this file
 
 /**
