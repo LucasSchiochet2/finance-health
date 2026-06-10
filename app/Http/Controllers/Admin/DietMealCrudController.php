@@ -41,6 +41,7 @@ class DietMealCrudController extends CrudController
     protected function setupListOperation()
     {
         CRUD::column('date')->type('date')->label('Data');
+        CRUD::column('meal_type')->label('Refeicao');
         CRUD::column('status')->label('Status');
         CRUD::column('observation')->label('Observacao');
         CRUD::column('user_id')
@@ -77,6 +78,11 @@ class DietMealCrudController extends CrudController
             ->type('date')
             ->label('Data')
             ->default(now()->toDateString());
+
+        CRUD::field('meal_type')
+            ->type('select_from_array')
+            ->label('Refeicao')
+            ->options(DietMeal::mealTypeOptions());
 
         CRUD::field('status')
             ->type('select_from_array')

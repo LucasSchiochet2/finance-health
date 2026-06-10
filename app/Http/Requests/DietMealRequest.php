@@ -28,6 +28,7 @@ class DietMealRequest extends FormRequest
         return [
             'user_id' => 'required|exists:users,id',
             'date' => 'required|date',
+            'meal_type' => ['required', Rule::in(DietMeal::MEAL_TYPES)],
             'status' => ['required', Rule::in(DietMeal::STATUSES)],
             'observation' => 'nullable|string',
         ];

@@ -17,6 +17,7 @@ class DietMealController extends Controller
             'date' => 'nullable|date',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
+            'meal_type' => ['nullable', Rule::in(DietMeal::MEAL_TYPES)],
             'status' => ['nullable', Rule::in(DietMeal::STATUSES)],
         ]);
 
@@ -35,6 +36,7 @@ class DietMealController extends Controller
     {
         $validated = $request->validate([
             'date' => 'required|date',
+            'meal_type' => ['required', Rule::in(DietMeal::MEAL_TYPES)],
             'status' => ['required', Rule::in(DietMeal::STATUSES)],
             'observation' => 'nullable|string',
         ]);
@@ -59,6 +61,7 @@ class DietMealController extends Controller
 
         $validated = $request->validate([
             'date' => 'sometimes|date',
+            'meal_type' => ['sometimes', Rule::in(DietMeal::MEAL_TYPES)],
             'status' => ['sometimes', Rule::in(DietMeal::STATUSES)],
             'observation' => 'nullable|string',
         ]);
@@ -81,6 +84,7 @@ class DietMealController extends Controller
         $filters = $request->validate([
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
+            'meal_type' => ['nullable', Rule::in(DietMeal::MEAL_TYPES)],
             'status' => ['nullable', Rule::in(DietMeal::STATUSES)],
         ]);
 
@@ -94,11 +98,13 @@ class DietMealController extends Controller
             'filters' => [
                 'start_date' => $filters['start_date'] ?? null,
                 'end_date' => $filters['end_date'] ?? null,
+                'meal_type' => $filters['meal_type'] ?? null,
                 'status' => $filters['status'] ?? null,
             ],
             'total_meals' => $totalMeals,
             'total_days' => $meals->pluck('date')->map(fn ($date) => $date->format('Y-m-d'))->unique()->count(),
             'score_average' => $this->averageScore($meals),
+            'by_meal_type' => $this->mealTypeSummary($meals),
             'by_status' => $this->statusSummary($meals),
             'by_day' => $this->dailySummary($meals),
             'by_month' => $this->monthlySummary($meals),
@@ -119,9 +125,33 @@ class DietMealController extends Controller
             $query->whereDate('date', '<=', $filters['end_date']);
         }
 
+        if (!empty($filters['meal_type'])) {
+            $query->where('meal_type', $filters['meal_type']);
+        }
+
         if (!empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }
+    }
+
+    private function mealTypeSummary(Collection $meals): array
+    {
+        $totalMeals = $meals->count();
+        $counts = $this->mealTypeCounts($meals);
+
+        return collect(DietMeal::MEAL_TYPES)
+            ->map(function (string $mealType) use ($counts, $totalMeals) {
+                $count = $counts[$mealType];
+
+                return [
+                    'meal_type' => $mealType,
+                    'label' => DietMeal::mealTypeLabel($mealType),
+                    'count' => $count,
+                    'percentage' => $totalMeals > 0 ? round(($count / $totalMeals) * 100, 2) : 0,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     private function statusSummary(Collection $meals): array
@@ -177,6 +207,15 @@ class DietMealController extends Controller
                 ];
             })
             ->values()
+            ->all();
+    }
+
+    private function mealTypeCounts(Collection $meals): array
+    {
+        $grouped = $meals->groupBy('meal_type')->map->count();
+
+        return collect(DietMeal::MEAL_TYPES)
+            ->mapWithKeys(fn (string $mealType) => [$mealType => $grouped->get($mealType, 0)])
             ->all();
     }
 
